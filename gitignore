@@ -1,0 +1,5 @@
+node_modules/
+# Partida y contraseña: no se suben a GitHub
+data/state.json
+data/state.json.tmp
+data/admin-password.txt

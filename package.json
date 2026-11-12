@@ -1,0 +1,10 @@
+{
+  "name": "slowpoke-league",
+  "version": "1.0.0",
+  "description": "App web para la Slowpoke League: draft de Pokémon, liga por rondas y cartas entre combates.",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "license": "UNLICENSED",
+  "private": true
+}
