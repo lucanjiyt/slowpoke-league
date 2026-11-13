@@ -1,5 +1,5 @@
 /* Slowpoke League — interfaz (parejas, organización y vista stream) */
-const {TYPES,NATURES,STATS,PHASES,RARITY_LABEL,KIND_LABEL,CARDS,NEGATIVE,teamPaste,toPaste,pairName,bankById,totalRounds,standings,currentMatches,spriteUrl,availableIds,describeChoice} = Logic;
+const {TYPES,NATURES,STATS,PHASES,RARITY_LABEL,KIND_LABEL,CARDS,NEGATIVE,teamPaste,toPaste,pairName,bankById,totalRounds,standings,currentMatches,spriteUrl,cardIconUrl,availableIds,describeChoice} = Logic;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const hhmm = t => new Date(t).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
@@ -86,10 +86,10 @@ function monCard(s, opts={}){
   </article>`;
 }
 function benchedFor(st,pid,round){ return (st.benched?.[pid]||[]).filter(b=>b.round===round).map(b=>b.bankId); }
-function rosterList(st,pid){
+function rosterList(st,pid,size="xs"){
   const team=st.teams?.[pid]||[]; const bench=st.phase==="battle"?benchedFor(st,pid,st.round):[];
   if(!team.length) return `<p class="muted small">Sin Pokémon todavía.</p>`;
-  return `<div class="roster">${team.map(s=>`<div class="slot">${sprite(s,"xs")}<b>${esc(s.species)}</b>${bench.includes(s.bankId)?`<span class="benched">FUERA</span>`:`<span class="small muted">${esc(s.item||"")}</span>`}</div>`).join("")}</div>`;
+  return `<div class="roster">${team.map(s=>`<div class="slot">${sprite(s,size)}<b>${esc(s.species)}</b>${bench.includes(s.bankId)?`<span class="benched">FUERA</span>`:`<span class="small muted">${esc(s.item||"")}</span>`}</div>`).join("")}</div>`;
 }
 function pips(n){ return `<div class="pips" aria-label="${n} de 6">${Array.from({length:6},(_,i)=>`<i class="${i<n?"on":""}"></i>`).join("")}</div>`; }
 function cardTile(o, i, opts={}){
@@ -97,8 +97,13 @@ function cardTile(o, i, opts={}){
   return `<button type="button" class="card${opts.sel?" sel":""}${opts.mini?" mini":""}" data-r="${c.rarity}" ${opts.act?`data-act="${opts.act}" data-i="${i}"`:"disabled"}>
     ${opts.badge?`<span class="chosen-badge">${esc(opts.badge)}</span>`:""}
     <span class="row between"><span class="rar">${RARITY_LABEL[c.rarity]}</span><span class="stars">${STARS[c.rarity]}</span></span>
-    <span class="ct">${esc(c.name)}</span><span class="ck">${KIND_LABEL[c.kind]}</span>
+    <span class="card-head">${c.icon?`<img class="card-ico" src="${cardIconUrl(c.icon)}" alt="" loading="lazy" data-ico>`:""}<span class="card-title"><span class="ct">${esc(c.name)}</span><span class="ck">${KIND_LABEL[c.kind]}</span></span></span>
     ${opts.mini?"":`<p>${esc(c.text)}</p>`}</button>`;
+}
+/* Carta en pequeño para el stream: icono + nombre, con el color de la rareza */
+function cardChip(o, sel){
+  const c=CARDS[o.card]; if(!c) return "";
+  return `<div class="chip${sel?" sel":""}" data-r="${c.rarity}">${c.icon?`<img class="chip-ico" src="${cardIconUrl(c.icon)}" alt="" loading="lazy" data-ico>`:""}<span>${esc(c.name)}</span><span class="stars">${STARS[c.rarity]}</span></div>`;
 }
 function standingsTable(st){
   const rows=standings(st);
@@ -211,14 +216,17 @@ function viewPlayer(){
   if(st.phase==="setup") body=`<div class="panel"><h2>Todo listo</h2><p>Ya estáis dentro. El draft empezará cuando la organización lo indique y aquí os aparecerán vuestras primeras opciones.</p><p class="insert" style="text-align:left">ESPERANDO JUGADORES…</p></div>`;
   else if(st.phase==="draft"){
     showTeam=true;
-    const dr=st.draft[pid]||{offer:[]};
-    const prog=`<div class="grid3">${st.pairs.map(p=>`<div class="row between"><span class="small">${esc(p.name)}</span>${pips(st.progress?.[p.id]||0)}</div>`).join("")}</div>`;
-    if(team.length>=6) body=`<div class="panel"><h2>Equipo completo</h2><p>Esperando a que el resto de parejas terminen el draft. Lo que ha elegido cada una se verá cuando acabe.</p>${prog}</div>`;
-    else body=`<div class="panel hot"><span class="eyebrow">Draft · elección ${team.length+1} de 6</span><h2>Elegid uno de estos dos</h2>
-      <p class="muted">El que no elijáis vuelve al banco y puede salirle a otra pareja. Nadie más ve vuestras opciones.</p>
+    const dr=st.draft[pid]||{offer:[]}, r=st.draftRound||1;
+    const done=st.pairs.filter(p=>(st.progress?.[p.id]||0)>=r).length;
+    const waitBar=`<div class="row">${st.pairs.map(p=>`<span class="ready-pill${(st.progress?.[p.id]||0)>=r?" on":""}">${esc(p.name)}</span>`).join("")}</div><span class="small muted">${done}/${st.pairs.length} parejas han elegido en esta ronda</span>`;
+    if(team.length>=r) body=`<div class="panel"><span class="eyebrow">Draft · elección ${r} de 6</span><h2>¡Elegido! Esperando al resto</h2>
+      <p>Cuando todas las parejas hayan elegido, os saldrán las dos opciones siguientes. Lo que elige cada pareja no se verá hasta que termine el draft.</p>
+      <div class="readybox">${waitBar}</div></div>`;
+    else body=`<div class="panel hot"><span class="eyebrow">Draft · elección ${r} de 6</span><h2>Elegid uno de estos dos</h2>
+      <p class="muted">Todas las parejas eligen a la vez. El que no elijáis vuelve al banco y puede salirle a otra pareja en la siguiente ronda. Nadie más ve vuestras opciones.</p>
       ${dr.offer.length?`<div class="grid2">${dr.offer.map(id=>monCard(bankById(st,id),{footer:`<button class="btn primary" data-act="pick" data-id="${esc(id)}" ${ui.busy?"disabled":""}>Elegir ${esc(bankById(st,id)?.species||"")}</button>`})).join("")}</div>`
       :`<p class="notice warn">No quedan Pokémon disponibles en el banco. Avisad a la organización.</p>`}
-      <details><summary>Progreso del resto</summary><div style="margin-top:12px">${prog}</div></details></div>`;
+      <div class="readybox">${waitBar}</div></div>`;
   }
   else if(st.phase==="cards"){
     showTeam=true;
@@ -250,11 +258,9 @@ function viewPlayer(){
     ${(st.shields?.[pid]||0)>0?`<span class="phase"><i></i>Protección activa</span>`:""}</div>
     ${body}
     ${showTeam?`<div class="panel"><span class="eyebrow">Vuestro equipo · ${team.length}/6</span>
-      ${team.length?`<div class="grid3">${team.map(s=>monCard(s)).join("")}</div>`:`<p class="muted">Vuestro equipo aparecerá aquí durante el draft.</p>`}</div>`:""}
-    <div class="grid2">
-      <div class="panel"><span class="eyebrow">Clasificación</span>${standingsTable(st)}</div>
-      <div class="panel"><span class="eyebrow">Lo último</span>${logList(st,15)}</div>
-    </div></main>`;
+      ${team.length?`<div class="team6">${team.map(s=>monCard(s)).join("")}</div>`:`<p class="muted">Vuestro equipo aparecerá aquí durante el draft.</p>`}</div>`:""}
+    <div class="panel standings-solo"><span class="eyebrow">Clasificación</span>${standingsTable(st)}</div>
+    </main>`;
 }
 
 function cardReady(offer){ return CARDS[offer.card].params.every(k=>ui.p[k]!==undefined&&ui.p[k]!==""); }
@@ -317,13 +323,15 @@ function adminControl(st){
       <div class="row"><button class="btn go" data-act="startDraft" ${dis} ${bankN<st.pairs.length*2?"disabled":""}>▶ Empezar draft</button></div></div>`;
   }
   if(st.phase==="draft"){
-    phase=`<div class="panel hot"><span class="eyebrow">Draft en curso</span><h2>Lo que le está saliendo a cada pareja</h2>
-      <div class="grid3">${st.pairs.map(p=>{ const t=st.teams[p.id]||[]; const o=st.draft[p.id]?.offer||[];
+    const r=st.draftRound||1, done=st.pairs.filter(p=>(st.teams[p.id]||[]).length>=r).length;
+    phase=`<div class="panel hot"><span class="eyebrow">Draft · elección ${r} de 6 · ${done}/${st.pairs.length} han elegido</span><h2>Lo que le está saliendo a cada pareja</h2>
+      <p class="small muted">Todas eligen a la vez. Cuando han elegido todas, salen solas las opciones de la siguiente elección.</p>
+      <div class="grid3">${st.pairs.map(p=>{ const t=st.teams[p.id]||[]; const o=st.draft[p.id]?.offer||[]; const picked=t.length>=r;
         return `<div class="mon"><div class="row between"><h3>${esc(p.name)}</h3>${pips(t.length)}</div>
-        ${t.length<6?`<div class="row" style="gap:4px">${o.map(id=>{const b=bankById(st,id);return `<span class="row" style="gap:2px">${sprite(b,"sm")}<span class="small">${esc(b?.species||id)}</span></span>`;}).join(`<span class="muted small">o</span>`)||"—"}</div>`:`<span class="small" style="color:var(--green)">Equipo completo</span>`}
+        ${picked?`<span class="small" style="color:var(--green)">Ha elegido a ${esc(t[t.length-1]?.species||"")}</span>`:`<div class="row" style="gap:4px">${o.map(id=>{const b=bankById(st,id);return `<span class="row" style="gap:2px">${sprite(b,"sm")}<span class="small">${esc(b?.species||id)}</span></span>`;}).join(`<span class="muted small">o</span>`)||"—"}</div>`}
         <div class="row" style="gap:0">${t.map(s=>sprite(s,"xs")).join("")}</div>
-        ${t.length<6?`<button class="btn sm" data-act="reroll" data-p="${p.id}" ${dis}>Volver a sortear</button>`:""}</div>`; }).join("")}</div>
-      ${simRow(`<button class="btn" data-act="simDraft" ${dis}>Elegir al azar por todas (una ronda)</button>`)}</div>`;
+        ${picked?"":`<button class="btn sm" data-act="reroll" data-p="${p.id}" ${dis}>Volver a sortear</button>`}</div>`; }).join("")}</div>
+      ${simRow(`<button class="btn" data-act="simDraft" ${dis}>Elegir al azar por las que faltan</button>`)}</div>`;
   }
   if(st.phase==="reveal"){
     const all=st.pairs.every(p=>st.ready?.[p.id]);
@@ -413,14 +421,15 @@ function adminBank(st){
 function viewStream(){
   const st=S.st, full=seesAll();
   let centre="";
-  if(st.phase==="draft") centre=`<div class="panel hot"><span class="eyebrow">Draft en directo</span>
+  if(st.phase==="draft") centre=`<div class="panel hot"><span class="eyebrow">Draft en directo · elección ${st.draftRound||1} de 6</span>
     <div style="display:grid">${st.pairs.map(p=>{ const t=st.teams[p.id]||[]; const n=st.progress?.[p.id]??t.length; const o=st.draft?.[p.id]?.offer||[];
       return `<div class="offer-pair"><div class="row between"><h3>${esc(p.name)}</h3>${pips(n)}</div>
       ${!full?"":n<6?`<div class="opts">${o.map(id=>{const b=bankById(st,id);return `${sprite(b,"sm")}<span>${esc(b?.species||"")}</span>`;}).join(`<span class="or">O</span>`)}</div>`:`<span class="small" style="color:var(--green)">Equipo completo</span>`}</div>`; }).join("")}</div>
     ${full?"":`<p class="small muted">Las elecciones se verán al terminar el draft.</p>`}</div>`;
   else if(st.phase==="cards") centre=`<div class="panel hot"><span class="eyebrow">Cartas de la ronda ${st.round}</span>
-    <div class="grid3">${st.pairs.map(p=>{ const ch=st.cardChoices[p.id]; const offs=st.cardOffers[p.id]||[];
-      return `<div style="display:grid;gap:8px"><h3>${esc(p.name)}</h3>${offs.length?offs.map((o,i)=>cardTile(o,i,{mini:true,sel:ch&&ch.idx===i})).join(""):`<div class="card back">? ? ?</div>`}<span class="small ${ch?"":"muted"}">${ch?"Ya ha elegido":"Eligiendo…"}</span></div>`; }).join("")}</div></div>`;
+    <div class="scards">${st.pairs.map(p=>{ const ch=st.cardChoices[p.id]; const offs=st.cardOffers[p.id]||[];
+      return `<div class="scards-pair"><div class="row between"><h3>${esc(p.name)}</h3><span class="ready-pill${ch?" on":""}">${ch?"ELEGIDA":"…"}</span></div>
+      ${offs.length?offs.map((o,i)=>cardChip(o,ch&&!ch.hidden&&ch.idx===i)).join(""):`<div class="card back">? ? ?</div>`}</div>`; }).join("")}</div></div>`;
   else if(st.phase==="reveal") centre=`<div class="panel hot"><span class="eyebrow">Revelación · cartas de la ronda ${st.reveal?.round||st.round}</span>${revealGrid(st,false)}</div>`;
   else if(st.phase==="battle") centre=`<div class="panel gold"><span class="eyebrow">Ronda ${st.round} de ${totalRounds(st)}</span><div style="display:grid;gap:10px">${matchesList(st,false)}</div></div>`;
   else if(st.phase==="finished") centre=`<div class="panel gold"><span class="eyebrow">Campeones</span><div class="bigtitle">${esc(standings(st)[0]?.name||"")}</div></div>`;
@@ -432,7 +441,7 @@ function viewStream(){
       ${centre}
       <div class="panel"><span class="eyebrow">En directo</span>${logList(st,14,"feed")}</div>
     </div>
-    <div class="grid3">${st.pairs.map(p=>`<div class="panel"><h3>${esc(p.name)}</h3>${rosterList(st,p.id)}</div>`).join("")}</div>
+    <div class="rosters" style="--cols:${st.pairs.length<=4?st.pairs.length:Math.ceil(st.pairs.length/2)}">${st.pairs.map(p=>`<div class="panel"><h3>${esc(p.name)}</h3>${rosterList(st,p.id,"sm")}</div>`).join("")}</div>
   </main>`;
 }
 
@@ -457,7 +466,7 @@ function render(){
 }
 window.addEventListener("hashchange",render);
 /* imagen que no carga → silueta */
-document.addEventListener("error",e=>{ const img=e.target; if(img.tagName==="IMG"&&img.dataset.spr!==undefined){ const s=document.createElement("span"); s.className=img.className+" none"; img.replaceWith(s); } },true);
+document.addEventListener("error",e=>{ const img=e.target; if(img.tagName==="IMG"&&img.dataset.ico!==undefined){ img.remove(); return; } if(img.tagName==="IMG"&&img.dataset.spr!==undefined){ const s=document.createElement("span"); s.className=img.className+" none"; img.replaceWith(s); } },true);
 
 /* ===================== Eventos ===================== */
 document.addEventListener("submit",async e=>{

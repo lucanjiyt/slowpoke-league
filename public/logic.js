@@ -9,20 +9,21 @@
   const KIND_LABEL = {mejora:"Mejora",ventaja:"Ventaja",sabotaje:"Sabotaje",caos:"Caos"};
 
   /* Catálogo de cartas. Para añadir una carta nueva: añádela aquí y su efecto en applyCard().
+     icon: nombre de un objeto de la PokéAPI (por ejemplo "toxic-orb", "leftovers") o "pokemon:NÚMERO".
      params posibles: own, moveSlot, moveName, item, nature, bank, tpair, tslot, tmove */
   const CARDS = {
-    fichaje:     {name:"Fichaje", rarity:"rara", kind:"mejora", text:"Cambia uno de tus Pokémon por uno de estos tres del banco.", params:["own","bank"]},
-    tutor:       {name:"Tutor de movimientos", rarity:"comun", kind:"mejora", text:"Enseña un movimiento a uno de tus Pokémon en lugar de otro.", params:["own","moveSlot","moveName"]},
-    mercader:    {name:"Mercader", rarity:"comun", kind:"mejora", text:"Cambia el objeto de uno de tus Pokémon.", params:["own","item"]},
-    mentas:      {name:"Menta", rarity:"comun", kind:"mejora", text:"Cambia la naturaleza de uno de tus Pokémon.", params:["own","nature"]},
-    proteccion:  {name:"Protección", rarity:"rara", kind:"ventaja", text:"Anula la próxima carta de sabotaje que os lancen.", params:[]},
-    toxiesfera:  {name:"Toxiesfera", rarity:"comun", kind:"sabotaje", text:"Equipa una Toxiesfera a un Pokémon rival.", params:["tpair","tslot"]},
-    malosgenes:  {name:"Malos genes", rarity:"comun", kind:"sabotaje", text:"Los IVs de Velocidad de un Pokémon rival pasan a 0.", params:["tpair","tslot"]},
-    desentrenado:{name:"Desentrenado", rarity:"rara", kind:"sabotaje", text:"Un Pokémon rival pierde todos sus EVs.", params:["tpair","tslot"]},
-    amnesia:     {name:"Amnesia", rarity:"rara", kind:"sabotaje", text:"Un movimiento de un Pokémon rival se convierte en Salpicadura.", params:["tpair","tslot","tmove"]},
-    ladron:      {name:"Ladrón", rarity:"rara", kind:"sabotaje", text:"Roba el objeto de un Pokémon rival y dáselo a uno tuyo.", params:["tpair","tslot","own"]},
-    banquillo:   {name:"Banquillo", rarity:"epica", kind:"sabotaje", text:"Un Pokémon rival no podrá usarse en el próximo combate.", params:["tpair","tslot"]},
-    forzoso:     {name:"Fichaje forzoso", rarity:"legendaria", kind:"caos", text:"Intercambia uno de tus Pokémon por uno de otra pareja. Ellos no eligen.", params:["own","tpair","tslot"]},
+    fichaje:     {icon:"great-ball", name:"Fichaje", rarity:"rara", kind:"mejora", text:"Cambia uno de tus Pokémon por uno de estos tres del banco.", params:["own","bank"]},
+    tutor:       {icon:"tm-normal", name:"Tutor de movimientos", rarity:"comun", kind:"mejora", text:"Enseña un movimiento a uno de tus Pokémon en lugar de otro.", params:["own","moveSlot","moveName"]},
+    mercader:    {icon:"amulet-coin", name:"Mercader", rarity:"comun", kind:"mejora", text:"Cambia el objeto de uno de tus Pokémon.", params:["own","item"]},
+    mentas:      {icon:"adamant-mint", name:"Menta", rarity:"comun", kind:"mejora", text:"Cambia la naturaleza de uno de tus Pokémon.", params:["own","nature"]},
+    proteccion:  {icon:"protective-pads", name:"Protección", rarity:"rara", kind:"ventaja", text:"Anula la próxima carta de sabotaje que os lancen.", params:[]},
+    toxiesfera:  {icon:"toxic-orb", name:"Toxiesfera", rarity:"comun", kind:"sabotaje", text:"Equipa una Toxiesfera a un Pokémon rival.", params:["tpair","tslot"]},
+    malosgenes:  {icon:"iron-ball", name:"Malos genes", rarity:"comun", kind:"sabotaje", text:"Los IVs de Velocidad de un Pokémon rival pasan a 0.", params:["tpair","tslot"]},
+    desentrenado:{icon:"pomeg-berry", name:"Desentrenado", rarity:"rara", kind:"sabotaje", text:"Un Pokémon rival pierde todos sus EVs.", params:["tpair","tslot"]},
+    amnesia:     {icon:"pokemon:129", name:"Amnesia", rarity:"rara", kind:"sabotaje", text:"Un movimiento de un Pokémon rival se convierte en Salpicadura.", params:["tpair","tslot","tmove"]},
+    ladron:      {icon:"pokemon:52", name:"Ladrón", rarity:"rara", kind:"sabotaje", text:"Roba el objeto de un Pokémon rival y dáselo a uno tuyo.", params:["tpair","tslot","own"]},
+    banquillo:   {icon:"smoke-ball", name:"Banquillo", rarity:"epica", kind:"sabotaje", text:"Un Pokémon rival no podrá usarse en el próximo combate.", params:["tpair","tslot"]},
+    forzoso:     {icon:"red-card", name:"Fichaje forzoso", rarity:"legendaria", kind:"caos", text:"Intercambia uno de tus Pokémon por uno de otra pareja. Ellos no eligen.", params:["own","tpair","tslot"]},
   };
   const NEGATIVE = new Set(["sabotaje","caos"]);
   /* Probabilidad de cada rareza. Quien pierde el combate tiene mejores cartas. */
@@ -133,6 +134,9 @@
     }
     return missing;
   }
+  const cardIconUrl = icon => !icon ? "" : String(icon).startsWith("pokemon:")
+    ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${String(icon).slice(8)}.png`
+    : `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${icon}.png`;
   const spriteUrl = dexNo => dexNo ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dexNo}.png` : "";
 
   /* ---------- estado ---------- */
@@ -269,18 +273,30 @@
     st.phase="reveal";
   }
 
+  /* ---------- draft por rondas: todas eligen a la vez; cuando han elegido todas, salen las siguientes opciones ---------- */
+  function dealDraftRound(st){
+    for(const p of shuffle(st.pairs.slice())){ st.draft[p.id]={offer:drawN(st,2)};
+      if(!st.draft[p.id].offer.length) addLog(st,"info",`El banco se ha quedado sin Pokémon para ${pairName(st,p.id)}.`); }
+  }
+  function advanceDraft(st){
+    const r=st.draftRound||1;
+    if(!st.pairs.every(p=>(st.teams[p.id]||[]).length>=r)) return;
+    if(r>=6){ st.phase="ready"; st.draft={}; addLog(st,"draft","Draft terminado. Todos los equipos están completos."); return; }
+    st.draftRound=r+1; dealDraftRound(st);
+    addLog(st,"draft",`Todas las parejas han elegido. Empieza la elección ${st.draftRound} de 6.`);
+  }
+
   /* ---------- acciones de participantes ---------- */
   function playerAction(st, pid, action, d){
     d=d||{};
     if(action==="draftPick"){
       const dr=st.draft[pid]; const team=st.teams[pid]=st.teams[pid]||[];
-      if(st.phase!=="draft"||!dr||!dr.offer.includes(d.bankId)||team.length>=6) fail("Esta elección ya no es válida.");
+      if(st.phase!=="draft"||!dr||!dr.offer.includes(d.bankId)||team.length>=(st.draftRound||6)) fail("Esta elección ya no es válida.");
       const s=fromBank(st,d.bankId); if(!s) fail("Ese Pokémon ya no está en el banco.");
       const other=dr.offer.find(x=>x!==d.bankId); team.push(s);
       addLog(st,"draft",`${pairName(st,pid)} elige a ${s.species}${other?` y descarta a ${bankById(st,other)?.species||other}`:""} (${team.length}/6).`, pid);
-      dr.offer = team.length<6 ? drawN(st,2) : [];
-      if(team.length<6 && !dr.offer.length) addLog(st,"info",`El banco se ha quedado sin Pokémon para ${pairName(st,pid)}.`);
-      if(st.pairs.every(p=>(st.teams[p.id]||[]).length>=6)){ st.phase="ready"; st.draft={}; addLog(st,"draft","Draft terminado. Todos los equipos están completos."); }
+      dr.offer=[];                                   /* el descartado vuelve al banco */
+      advanceDraft(st);
       return;
     }
     if(action==="chooseCard"){
@@ -327,11 +343,12 @@
         if(st.phase!=="setup") fail("El draft ya ha empezado.");
         if((st.bank||[]).length<st.pairs.length*2) fail("No hay suficientes Pokémon en el banco.");
         st.schedule=roundRobin(st.pairs.map(p=>p.id)); st.teams={}; st.draft={}; st.phase="draft"; st.round=0;
-        for(const p of st.pairs){ st.teams[p.id]=[]; st.draft[p.id]={offer:drawN(st,2)}; }
+        for(const p of st.pairs) st.teams[p.id]=[];
+        st.draftRound=1; dealDraftRound(st);
         addLog(st,"draft","¡Empieza el draft! Cada pareja tiene sus dos primeras opciones."); return;
       }
       case "reroll":{
-        const pid=d.pid; if(st.phase!=="draft"||!st.draft[pid]) fail("No se puede volver a sortear ahora.");
+        const pid=d.pid; if(st.phase!=="draft"||!st.draft[pid]||(st.teams[pid]||[]).length>=st.draftRound) fail("Esa pareja ya ha elegido en esta ronda del draft.");
         st.draft[pid].offer=[]; st.draft[pid].offer=drawN(st,2);
         addLog(st,"info",`La organización vuelve a sortear las opciones de ${pairName(st,pid)}.`); return;
       }
@@ -378,9 +395,9 @@
       /* ---- Modo prueba: la app juega por las parejas que no han hecho su parte ---- */
       case "simDraft":{
         if(st.phase!=="draft") fail("No hay draft en curso.");
-        let n=0;
-        for(const p of st.pairs){ const o=st.draft[p.id]?.offer||[]; if(st.phase!=="draft") break;
-          if(o.length && (st.teams[p.id]||[]).length<6){ playerAction(st,p.id,"draftPick",{bankId:o[rnd(o.length)]}); n++; } }
+        let n=0; const r=st.draftRound;
+        for(const p of st.pairs){ if(st.phase!=="draft"||st.draftRound!==r) break; const o=st.draft[p.id]?.offer||[];
+          if(o.length && (st.teams[p.id]||[]).length<r){ playerAction(st,p.id,"draftPick",{bankId:o[rnd(o.length)]}); n++; } }
         if(!n) fail("No queda nada que elegir.");
         return;
       }
@@ -461,7 +478,7 @@
   }
 
   const api = {TYPES,NATURES,STATS,PHASES,RARITY_LABEL,KIND_LABEL,CARDS,NEGATIVE,WEIGHTS,GameError,
-    clone,slug,code4,dexKey,resolveDex,enrichSets,spriteUrl,toPaste,teamPaste,parsePaste,normalizeSet,parseBankText,assignIds,initState,pairName,bankById,totalRounds,
+    clone,slug,code4,dexKey,resolveDex,enrichSets,spriteUrl,cardIconUrl,toPaste,teamPaste,parsePaste,normalizeSet,parseBankText,assignIds,initState,pairName,bankById,totalRounds,
     availableIds,drawN,standings,roundRobin,currentMatches,findMon,dealCards,applyCard,resolveCards,describeChoice,playerAction,adminAction,publicView};
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Logic = api;
 })(this);
