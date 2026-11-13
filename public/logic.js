@@ -16,7 +16,7 @@
     tutor:       {icon:"tm-normal", name:"Tutor de movimientos", rarity:"comun", kind:"mejora", text:"Enseña un movimiento a uno de tus Pokémon en lugar de otro.", params:["own","moveSlot","moveName"]},
     mercader:    {icon:"amulet-coin", name:"Mercader", rarity:"comun", kind:"mejora", text:"Cambia el objeto de uno de tus Pokémon.", params:["own","item"]},
     mentas:      {icon:"adamant-mint", name:"Menta", rarity:"comun", kind:"mejora", text:"Cambia la naturaleza de uno de tus Pokémon.", params:["own","nature"]},
-    proteccion:  {icon:"protective-pads", name:"Protección", rarity:"rara", kind:"ventaja", text:"Anula la próxima carta de sabotaje que os lancen.", params:[]},
+    proteccion:  {icon:"protective-pads", name:"Protección", rarity:"rara", kind:"ventaja", text:"Escudo para esta misma ronda: anula todas las cartas de sabotaje y caos que os lancen ahora.", params:[]},
     toxiesfera:  {icon:"toxic-orb", name:"Toxiesfera", rarity:"comun", kind:"sabotaje", text:"Equipa una Toxiesfera a un Pokémon rival.", params:["tpair","tslot"]},
     malosgenes:  {icon:"iron-ball", name:"Malos genes", rarity:"comun", kind:"sabotaje", text:"Los IVs de Velocidad de un Pokémon rival pasan a 0.", params:["tpair","tslot"]},
     desentrenado:{icon:"pomeg-berry", name:"Desentrenado", rarity:"rara", kind:"sabotaje", text:"Un Pokémon rival pierde todos sus EVs.", params:["tpair","tslot"]},
@@ -202,13 +202,14 @@
     }
     addLog(st,"carta",`Se reparten las cartas de la ronda ${st.round}.`);
   }
-  function applyCard(st, pid, choice){
+  /* shielded: parejas que han elegido Protección en esta ronda */
+  function applyCard(st, pid, choice, shielded){
     const offer=(st.cardOffers[pid]||[])[choice.idx]; if(!offer) return;
     const c=CARDS[offer.card], P=choice.params||{}, me=pairName(st,pid), tag=`R${st.round}`;
     const fizz=why=>addLog(st,"carta",`${me} juega ${c.name}, pero no tiene efecto (${why}).`);
     if(NEGATIVE.has(c.kind)){
       if(!P.tpair || P.tpair===pid || !st.teams[P.tpair]) return fizz("objetivo no válido");
-      if((st.shields[P.tpair]||0)>0){ st.shields[P.tpair]--; addLog(st,"sabotaje",`${me} lanza ${c.name} contra ${pairName(st,P.tpair)}, pero su Protección la bloquea.`); return; }
+      if(shielded && shielded.has(P.tpair)){ addLog(st,"sabotaje",`${me} lanza ${c.name} contra ${pairName(st,P.tpair)}, pero su Protección la bloquea.`); return; }
     }
     const own=P.own?findMon(st,pid,P.own):null, tgt=P.tslot&&P.tpair?findMon(st,P.tpair,P.tslot):null;
     const tn=P.tpair?pairName(st,P.tpair):"";
@@ -223,7 +224,7 @@
         own.s.mods.push(`${tag}: objeto ${it}`); addLog(st,"carta",`${me}: ${own.s.species} cambia ${own.s.item||"nada"} por ${it}.`); own.s.item=it; break; }
       case "mentas":{ if(!own||!NATURES.includes(P.nature)) return fizz("faltan datos");
         own.s.mods.push(`${tag}: ${P.nature}`); addLog(st,"carta",`${me}: ${own.s.species} pasa a naturaleza ${P.nature}.`); own.s.nature=P.nature; break; }
-      case "proteccion":{ st.shields[pid]=(st.shields[pid]||0)+1; addLog(st,"carta",`${me} activa Protección.`); break; }
+      case "proteccion":{ addLog(st,"carta",`${me} se protege con un escudo esta ronda.`); break; }
       case "toxiesfera":{ if(!tgt) return fizz("el Pokémon ya no está"); tgt.s.item="Toxic Orb"; tgt.s.mods.push(`${tag}: Toxiesfera (${me})`);
         addLog(st,"sabotaje",`${me} equipa una Toxiesfera a ${tgt.s.species} de ${tn}.`); break; }
       case "malosgenes":{ if(!tgt) return fizz("el Pokémon ya no está"); tgt.s.ivs.spe=0; tgt.s.mods.push(`${tag}: 0 IVs Vel (${me})`);
@@ -258,13 +259,15 @@
      y cada pareja marca que está lista. */
   function resolveCards(st){
     const table=standings(st); const rank=Object.fromEntries(table.map((r,i)=>[r.id,i]));
+    /* Protección actúa en la misma ronda: se mira antes de aplicar nada */
+    const shielded=new Set(Object.entries(st.cardChoices).filter(([pid,ch])=>st.cardOffers[pid]?.[ch.idx]?.card==="proteccion").map(([pid])=>pid));
     const order=Object.keys(st.cardChoices).sort((a,b)=>(rank[b]-rank[a])||(Math.random()-.5));
     addLog(st,"carta","Se resuelven las cartas, de la última pareja a la primera.");
     const entries=[];
     for(const pid of order){
       const ch=st.cardChoices[pid], offer=(st.cardOffers[pid]||[])[ch.idx];
       const desc=describeChoice(st,pid,ch,offer); const before=st.log.length;
-      applyCard(st,pid,ch);
+      applyCard(st,pid,ch,shielded);
       entries.push({pid, card:offer?.card||null, desc, outcome:st.log.slice(before).map(l=>l.text)});
     }
     st.pairs.filter(p=>!st.cardChoices[p.id]).forEach(p=>entries.push({pid:p.id, card:null, desc:"", outcome:["No eligió carta a tiempo."]}));

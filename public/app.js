@@ -108,7 +108,7 @@ function cardChip(o, sel){
 function standingsTable(st){
   const rows=standings(st);
   return `<div class="scroll"><table class="standings"><thead><tr><th>#</th><th>Pareja</th><th>V</th><th>D</th></tr></thead><tbody>
-  ${rows.map((r,i)=>`<tr><td class="pos">${i+1}</td><td class="name">${esc(r.name)}${(st.shields?.[r.id]||0)>0?` <span class="small" style="color:var(--cyan)">◆ Protección</span>`:""}</td><td class="w">${r.w}</td><td class="l">${r.l}</td></tr>`).join("")}
+  ${rows.map((r,i)=>`<tr><td class="pos">${i+1}</td><td class="name">${esc(r.name)}</td><td class="w">${r.w}</td><td class="l">${r.l}</td></tr>`).join("")}
   </tbody></table></div>`;
 }
 function matchesList(st, admin){
@@ -255,7 +255,7 @@ function viewPlayer(){
   return `<main class="wrap">
     <div class="row between"><div style="display:grid;gap:8px"><span class="eyebrow">Tu pareja</span><h1>${esc(pairName(st,pid))}</h1>
     <span class="muted">${esc(mates.join(" y ")||S.you.name)}</span></div>
-    ${(st.shields?.[pid]||0)>0?`<span class="phase"><i></i>Protección activa</span>`:""}</div>
+</div>
     ${body}
     ${showTeam?`<div class="panel"><span class="eyebrow">Vuestro equipo · ${team.length}/6</span>
       ${team.length?`<div class="team6">${team.map(s=>monCard(s)).join("")}</div>`:`<p class="muted">Vuestro equipo aparecerá aquí durante el draft.</p>`}</div>`:""}
@@ -282,7 +282,7 @@ function cardForm(st,pid,offer){
     ? `<div style="display:grid;gap:8px"><span class="eyebrow">Elige el fichaje</span><div class="grid3">${(offer.options||[]).map(id=>monCard(bankById(st,id),{act:"bankPick",id,selected:P.bank===id})).join("")}</div></div>` : "";
   return `<div class="notice" style="display:grid;gap:14px"><h3>${esc(c.name)}</h3>
     ${fields.length?`<div class="grid3">${fields.join("")}</div>`:""}${bankPick}
-    ${NEGATIVE.has(c.kind)?`<p class="small muted">Si la pareja objetivo tiene Protección, la carta se anula y se gasta su Protección.</p>`:""}
+    ${NEGATIVE.has(c.kind)?`<p class="small muted">Si la pareja objetivo ha elegido Protección en esta misma ronda, vuestra carta no tendrá efecto.</p>`:""}
     <div class="row"><button class="btn primary" data-act="confirmCard" ${cardReady(offer)&&!ui.busy?"":"disabled"}>${ui.busy?"Enviando…":"Confirmar carta"}</button></div></div>`;
 }
 
